@@ -1,13 +1,15 @@
 import streamlit as st
 import time
 from dotenv import load_dotenv
+
+# Load env variables before importing local modules
+load_dotenv()
+
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.rag_engine import build_rag_chain, ask_question
-
-load_dotenv()
 
 # ─── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -20,288 +22,418 @@ st.set_page_config(
 # ─── Custom CSS ─────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
-/* ── Root Variables ── */
 :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --surface-2: #1a1a25;
-    --border: #2a2a3a;
-    --accent: #7c3aed;
-    --accent-glow: #9f67ff;
+    --bg: #03000a;
+    --bg-gradient: radial-gradient(circle at 50% 50%, #0c051a 0%, #03000a 100%);
+    --surface: rgba(17, 12, 28, 0.65);
+    --surface-border: rgba(139, 92, 246, 0.15);
+    --surface-hover: rgba(17, 12, 28, 0.85);
+    --border-hover: rgba(139, 92, 246, 0.4);
+    --accent: #8b5cf6;
+    --accent-gradient: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+    --accent-glow: #a78bfa;
     --accent-2: #06b6d4;
-    --text: #e8e8f0;
-    --text-muted: #7070a0;
+    --text: #f3f4f6;
+    --text-muted: #9ca3af;
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
 }
 
-/* ── Global Reset ── */
 html, body, [class*="css"] {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Outfit', sans-serif;
     background-color: var(--bg) !important;
+    background: var(--bg-gradient) !important;
     color: var(--text) !important;
 }
 
 .stApp {
-    background: var(--bg) !important;
+    background: var(--bg-gradient) !important;
 }
 
-/* Animated grid background */
+/* Background Glowing Orbs */
 .stApp::before {
     content: '';
     position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background-image:
-        linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
+    top: -10%; left: -10%;
+    width: 50%; height: 50%;
+    background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+}
+.stApp::after {
+    content: '';
+    position: fixed;
+    bottom: -10%; right: -10%;
+    width: 50%; height: 50%;
+    background: radial-gradient(circle, rgba(6, 182, 212, 0.06) 0%, transparent 70%);
     pointer-events: none;
     z-index: 0;
 }
 
-/* ── Sidebar ── */
+/* Sidebar Styling */
 [data-testid="stSidebar"] {
-    background: var(--surface) !important;
-    border-right: 1px solid var(--border) !important;
+    background-color: rgba(9, 6, 16, 0.95) !important;
+    border-right: 1px solid var(--surface-border) !important;
+    backdrop-filter: blur(20px);
+    color: var(--text);
 }
-
-[data-testid="stSidebar"] * {
+[data-testid="stSidebar"] .stMarkdown, 
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] h4,
+[data-testid="stSidebar"] h5,
+[data-testid="stSidebar"] h6 {
     color: var(--text) !important;
 }
+div[data-testid="stRadio"] label p {
+    color: var(--text) !important;
+    font-size: 0.85rem !important;
+}
+div[data-testid="stRadio"] div[role="radiogroup"] {
+    background: rgba(17, 12, 28, 0.4) !important;
+    border: 1px solid var(--surface-border) !important;
+    border-radius: 10px !important;
+    padding: 0.5rem 0.75rem !important;
+    gap: 1rem;
+}
 
-/* ── Headings ── */
 h1, h2, h3, h4, h5, h6 {
     font-family: 'Syne', sans-serif !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em;
     color: var(--text) !important;
 }
 
-/* ── Hero Title ── */
 .hero-title {
     font-family: 'Syne', sans-serif;
-    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-size: clamp(2rem, 5vw, 3.2rem);
     font-weight: 800;
     line-height: 1.1;
     margin: 0;
-    background: linear-gradient(135deg, #ffffff 0%, var(--accent-glow) 50%, var(--accent-2) 100%);
+    background: linear-gradient(135deg, #ffffff 10%, #a78bfa 50%, #06b6d4 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+    text-shadow: 0 0 40px rgba(139, 92, 246, 0.15);
 }
 
 .hero-sub {
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.8rem;
     color: var(--text-muted);
-    letter-spacing: 0.2em;
+    letter-spacing: 0.15em;
     text-transform: uppercase;
     margin-top: 0.5rem;
 }
 
-/* ── Cards ── */
+/* Premium Card Design with Glassmorphism */
 .card {
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.5rem;
-    margin-bottom: 1rem;
+    border: 1px solid var(--surface-border);
+    border-radius: 16px;
+    padding: 1.75rem;
+    margin-bottom: 1.25rem;
     position: relative;
     overflow: hidden;
-    transition: border-color 0.2s;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-
 .card:hover {
-    border-color: var(--accent);
+    transform: translateY(-4px);
+    border-color: var(--border-hover);
+    box-shadow: 0 10px 40px rgba(139, 92, 246, 0.15);
 }
-
 .card::before {
     content: '';
     position: absolute;
     top: 0; left: 0;
-    width: 3px; height: 100%;
-    background: linear-gradient(180deg, var(--accent), var(--accent-2));
+    width: 4px; height: 100%;
+    background: var(--accent-gradient);
 }
-
 .card-title {
     font-family: 'Syne', sans-serif;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 700;
     letter-spacing: 0.15em;
     text-transform: uppercase;
-    color: var(--text-muted);
-    margin-bottom: 0.75rem;
+    color: var(--accent-glow);
+    margin-bottom: 0.85rem;
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
-
 .card-content {
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     line-height: 1.7;
-    color: var(--text);
+    color: #e5e7eb;
 }
 
-/* ── Accent Badge ── */
+/* Onboarding Card specificity */
+.onboarding-card {
+    background: rgba(17, 12, 28, 0.45) !important;
+}
+.onboarding-card::before {
+    display: none;
+}
+
+/* Badges */
 .badge {
     display: inline-block;
-    padding: 0.2rem 0.6rem;
-    border-radius: 4px;
-    font-size: 0.65rem;
+    padding: 0.3rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.7rem;
     font-weight: 600;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
+    backdrop-filter: blur(5px);
 }
+.badge-purple { background: rgba(139, 92, 246, 0.12); color: var(--accent-glow); border: 1px solid rgba(139, 92, 246, 0.25); }
+.badge-cyan   { background: rgba(6, 182, 212, 0.12); color: var(--accent-2); border: 1px solid rgba(6, 182, 212, 0.25); }
+.badge-green  { background: rgba(16, 185, 129, 0.12); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.25); }
 
-.badge-purple { background: rgba(124,58,237,0.2); color: var(--accent-glow); border: 1px solid rgba(124,58,237,0.3); }
-.badge-cyan   { background: rgba(6,182,212,0.15); color: var(--accent-2);    border: 1px solid rgba(6,182,212,0.3); }
-.badge-green  { background: rgba(16,185,129,0.15); color: var(--success);    border: 1px solid rgba(16,185,129,0.3); }
-
-/* ── Input & Buttons ── */
+/* Inputs and Selectors */
 .stTextInput > div > div > input,
 .stSelectbox > div > div {
-    background: var(--surface-2) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
+    background: rgba(17, 12, 28, 0.6) !important;
+    border: 1px solid var(--surface-border) !important;
+    border-radius: 10px !important;
     color: var(--text) !important;
-    font-family: 'JetBrains Mono', monospace !important;
+    font-family: 'Outfit', sans-serif !important;
+    font-size: 0.85rem !important;
+    padding: 0.5rem 0.75rem !important;
+    transition: all 0.2s ease !important;
 }
-
 .stTextInput > div > div > input:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 2px rgba(124,58,237,0.2) !important;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2) !important;
 }
 
+/* Action Button */
 .stButton > button {
-    background: linear-gradient(135deg, var(--accent), #5b21b6) !important;
+    background: var(--accent-gradient) !important;
     color: white !important;
     border: none !important;
-    border-radius: 8px !important;
+    border-radius: 10px !important;
     font-family: 'Syne', sans-serif !important;
     font-weight: 700 !important;
-    font-size: 0.875rem !important;
+    font-size: 0.85rem !important;
     letter-spacing: 0.05em !important;
-    padding: 0.6rem 1.5rem !important;
-    transition: all 0.2s !important;
+    padding: 0.75rem 1.5rem !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
     text-transform: uppercase !important;
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2) !important;
 }
-
 .stButton > button:hover {
-    transform: translateY(-1px) !important;
-    box-shadow: 0 8px 25px rgba(124,58,237,0.4) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(139, 92, 246, 0.45) !important;
 }
 
-/* Secondary button */
+/* Secondary Button override */
 .stButton > button[kind="secondary"] {
-    background: var(--surface-2) !important;
-    border: 1px solid var(--border) !important;
+    background: rgba(17, 12, 28, 0.8) !important;
+    border: 1px solid var(--surface-border) !important;
+    color: var(--text) !important;
+    box-shadow: none !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    border-color: var(--accent) !important;
 }
 
-/* ── Progress / Status ── */
+/* Status Bar */
 .status-bar {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    background: var(--surface-2);
-    border-radius: 8px;
-    margin: 0.4rem 0;
-    border: 1px solid var(--border);
-    font-size: 0.8rem;
+    padding: 0.8rem 1.1rem;
+    background: rgba(17, 12, 28, 0.7);
+    border-radius: 10px;
+    margin: 0.5rem 0;
+    border: 1px solid var(--surface-border);
+    font-size: 0.85rem;
+    backdrop-filter: blur(10px);
 }
-
 .status-dot {
-    width: 8px; height: 8px;
+    width: 10px; height: 10px;
     border-radius: 50%;
     flex-shrink: 0;
 }
+.dot-active   { background: var(--accent-2); box-shadow: 0 0 10px var(--accent-2); animation: pulse 1.5s infinite; }
+.dot-done     { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.dot-pending  { background: rgba(255, 255, 255, 0.1); }
 
-.dot-active   { background: var(--accent-glow); box-shadow: 0 0 8px var(--accent-glow); animation: pulse 1.5s infinite; }
-.dot-done     { background: var(--success); }
-.dot-pending  { background: var(--border); }
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.4; }
-}
-
-/* ── Chat ── */
+/* Chat Layout */
 .chat-container {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 1.25rem;
-    max-height: 420px;
+    background: rgba(17, 12, 28, 0.4);
+    border: 1px solid var(--surface-border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    max-height: 480px;
     overflow-y: auto;
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
+    backdrop-filter: blur(10px);
 }
-
 .chat-msg {
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.25rem;
 }
-
 .chat-label {
-    font-size: 0.65rem;
+    font-size: 0.7rem;
     font-weight: 700;
-    letter-spacing: 0.15em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
 }
-
 .chat-bubble {
     display: inline-block;
-    padding: 0.6rem 1rem;
-    border-radius: 10px;
-    font-size: 0.85rem;
+    padding: 0.8rem 1.25rem;
+    border-radius: 14px;
+    font-size: 0.9rem;
     line-height: 1.6;
-    max-width: 90%;
+    max-width: 85%;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
 }
-
 .user-label  { color: var(--accent-glow); }
 .bot-label   { color: var(--accent-2); }
 
-.user-bubble { background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.25); align-self: flex-end; }
-.bot-bubble  { background: rgba(6,182,212,0.1);  border: 1px solid rgba(6,182,212,0.2);   align-self: flex-start; }
-
-/* ── Divider ── */
-hr {
-    border: none !important;
-    border-top: 1px solid var(--border) !important;
-    margin: 1.5rem 0 !important;
+.user-bubble {
+    background: rgba(139, 92, 246, 0.18) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    align-self: flex-end;
+    border-bottom-right-radius: 2px;
+}
+.bot-bubble  {
+    background: rgba(17, 12, 28, 0.75) !important;
+    border: 1px solid rgba(6, 182, 212, 0.15) !important;
+    align-self: flex-start;
+    border-top-left-radius: 2px;
 }
 
-/* ── Transcript box ── */
+/* Transcript Box */
 .transcript-box {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 1.25rem;
-    font-size: 0.82rem;
+    background: rgba(9, 6, 16, 0.6);
+    border: 1px solid var(--surface-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
     line-height: 1.8;
-    max-height: 300px;
+    max-height: 350px;
     overflow-y: auto;
     color: var(--text-muted);
     white-space: pre-wrap;
     word-break: break-word;
 }
 
-/* ── Stale Streamlit elements ── */
-.stProgress > div > div > div { background: var(--accent) !important; }
-.stSpinner > div { border-top-color: var(--accent) !important; }
-[data-testid="stMarkdownContainer"] p { color: var(--text) !important; }
-label { color: var(--text-muted) !important; font-size: 0.8rem !important; }
+/* Moving Background Glow Orbs */
+@keyframes floatOrb1 {
+    0% { transform: translate(0px, 0px) scale(1); }
+    50% { transform: translate(30px, -50px) scale(1.2); }
+    100% { transform: translate(0px, 0px) scale(1); }
+}
+@keyframes floatOrb2 {
+    0% { transform: translate(0px, 0px) scale(1); }
+    50% { transform: translate(-30px, 50px) scale(0.8); }
+    100% { transform: translate(0px, 0px) scale(1); }
+}
+.stApp::before {
+    animation: floatOrb1 20s infinite ease-in-out;
+}
+.stApp::after {
+    animation: floatOrb2 25s infinite ease-in-out;
+}
 
-/* scrollbar */
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: var(--bg); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+/* Pulsing Status Dot */
+@keyframes pulse {
+    0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7);
+    }
+    70% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 10px rgba(6, 182, 212, 0);
+    }
+    100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0);
+    }
+}
+
+/* Premium Scrollbars */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: rgba(17, 12, 28, 0.2);
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.35);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.6);
+}
+
+/* Premium File Uploader Overrides */
+div[data-testid="stFileUploader"] {
+    background: rgba(17, 12, 28, 0.4) !important;
+    border: 1px dashed rgba(139, 92, 246, 0.25) !important;
+    border-radius: 14px !important;
+    padding: 1.5rem !important;
+    transition: all 0.3s ease;
+}
+div[data-testid="stFileUploader"]:hover {
+    border-color: rgba(139, 92, 246, 0.6) !important;
+    background: rgba(17, 12, 28, 0.5) !important;
+}
+div[data-testid="stFileUploader"] section {
+    background: transparent !important;
+    border: none !important;
+}
+div[data-testid="stFileUploader"] section button {
+    background: rgba(139, 92, 246, 0.15) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    color: var(--text) !important;
+    border-radius: 8px !important;
+    font-size: 0.8rem !important;
+    font-weight: 600 !important;
+}
+div[data-testid="stFileUploader"] section button:hover {
+    background: rgba(139, 92, 246, 0.35) !important;
+    border-color: var(--accent) !important;
+}
 </style>
 """, unsafe_allow_html=True)
+
+# ─── Demo RAG Chain Helper ──────────────────────────────────────────────────────
+class DemoRagChain:
+    def invoke(self, question: str) -> str:
+        q = question.lower()
+        if "action" in q or "task" in q:
+            return "According to the transcript, the action items are:\\n1. **Akarsh Vyas** to implement the premium glassmorphic UI stylesheet and layout design (Deadline: Tomorrow).\\n2. **Shreya** to focus on the backend pipeline, setting up Mistral API keys, and integrating ChromaDB (Deadline: Friday).\\n3. **All** to meet on Thursday for a status sync."
+        elif "decision" in q:
+            return "The team decided to use **Python and Streamlit** for the frontend with custom HTML/CSS overrides, and **LangChain with Mistral AI** for LLM orchestration. They also agreed to use **ChromaDB** locally as the vector database."
+        elif "role" in q or "who" in q:
+            return "In this meeting:\\n- **Akarsh Vyas** is responsible for UI styling and layout design.\\n- **Shreya** is responsible for the backend integration, including Mistral API and ChromaDB."
+        elif "timeline" in q or "deadline" in q or "friday" in q:
+            return "The UI design needs to be finished by tomorrow, and the fully integrated backend pipeline is scheduled to be completed by Friday."
+        elif "whisper" in q:
+            return "The team selected **OpenAI Whisper** (specifically the 'small' model running locally) for transcribing English audio chunks."
+        elif "sarvam" in q or "hinglish" in q:
+            return "**Sarvam AI's** STT-translate API was selected to transcribe Hinglish audio and automatically translate it to English."
+        else:
+            return "This is an offline demo RAG chain. The kickoff meeting covered system architecture and roles for the AI Video Assistant project. You can ask me about task owners (Akarsh or Shreya), technologies (Streamlit, LangChain, Mistral, ChromaDB, Whisper, Sarvam), or deadlines!"
 
 # ─── Session State Init ──────────────────────────────────────────────────────────
 for key, default in {
@@ -336,24 +468,38 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown('<span class="badge badge-purple">Input</span>', unsafe_allow_html=True)
-    source = st.text_input("YouTube URL or File Path", placeholder="https://youtube.com/watch?v=... or /path/to/file.mp4")
+    input_type = st.radio("Input Source Type", ["YouTube URL / Local Path", "Upload File"], index=0)
 
-    language = st.selectbox("Language", ["english", "hinglish"], index=0)
+    source = ""
+    uploaded_file = None
+    if input_type == "YouTube URL / Local Path":
+        source = st.text_input("YouTube URL or File Path", placeholder="https://youtube.com/watch?v=... or /path/to/file.mp4")
+    else:
+        uploaded_file = st.file_uploader("Upload Video or Audio File", type=["mp4", "mkv", "avi", "mov", "mp3", "wav", "m4a"])
+
+    st.markdown('<span class="badge badge-cyan" style="margin-top: 1rem; display: inline-block;">Language</span>', unsafe_allow_html=True)
+    language = st.radio("Choose transcription language", ["english", "hinglish"], index=0, horizontal=True, label_visibility="collapsed")
 
     run_btn = st.button("⚡  Analyse", use_container_width=True)
 
-    if st.session_state.pipeline_done:
-        st.markdown("---")
-        st.markdown('<span class="badge badge-green">Pipeline Status</span>', unsafe_allow_html=True)
-        for step, icon, label in [
-            ("audio",      "🔊", "Audio Processing"),
-            ("transcript", "📝", "Transcription"),
-            ("title",      "🏷️", "Title Generation"),
-            ("summary",    "📋", "Summarisation"),
-            ("extract",    "🔍", "Extraction"),
-            ("rag",        "🧠", "RAG Engine"),
-        ]:
-            render_step_bar(label, step, icon)
+    sidebar_status_placeholder = st.empty()
+
+def render_sidebar_status():
+    if st.session_state.pipeline_done or st.session_state.pipeline_steps:
+        with sidebar_status_placeholder.container():
+            st.markdown("---")
+            st.markdown('<span class="badge badge-green">Pipeline Status</span>', unsafe_allow_html=True)
+            for step, icon, label in [
+                ("audio",      "🔊", "Audio Processing"),
+                ("transcript", "📝", "Transcription"),
+                ("title",      "🏷️", "Title Generation"),
+                ("summary",    "📋", "Summarisation"),
+                ("extract",    "🔍", "Extraction"),
+                ("rag",        "🧠", "RAG Engine"),
+            ]:
+                render_step_bar(label, step, icon)
+
+render_sidebar_status()
 
 # ─── Main Area ──────────────────────────────────────────────────────────────────
 st.markdown('<div class="hero-title">AI Video Assistant</div>', unsafe_allow_html=True)
@@ -362,8 +508,23 @@ st.markdown("---")
 
 # ── Run Pipeline ────────────────────────────────────────────────────────────────
 if run_btn:
-    if not source.strip():
-        st.error("Please enter a YouTube URL or file path.")
+    source_path = ""
+    if input_type == "YouTube URL / Local Path":
+        if source and source.strip():
+            source_path = source.strip()
+    else:
+        if uploaded_file is not None:
+            import os
+            os.makedirs("downloads", exist_ok=True)
+            source_path = os.path.join("downloads", uploaded_file.name)
+            with open(source_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+
+    if not source_path:
+        if input_type == "YouTube URL / Local Path":
+            st.error("Please enter a YouTube URL or file path.")
+        else:
+            st.error("Please upload a video or audio file.")
     else:
         st.session_state.pipeline_done = False
         st.session_state.result = None
@@ -374,17 +535,19 @@ if run_btn:
 
         def update_step(key, state):
             st.session_state.pipeline_steps[key] = state
+            render_sidebar_status()
 
         try:
             with progress_placeholder.container():
                 st.info("⚙️ Pipeline running — see sidebar for live status…")
 
             update_step("audio", "active")
-            chunks = process_input(source)
+            chunks = process_input(source_path)
             update_step("audio", "done")
 
             update_step("transcript", "active")
-            transcript = transcribe_all(chunks, language)
+            transcription_res = transcribe_all(chunks, language)
+            transcript = transcription_res["text"]
             update_step("transcript", "done")
 
             update_step("title", "active")
@@ -527,19 +690,67 @@ if st.session_state.result:
             st.rerun()
 
 else:
-    # Empty state
+    # Onboarding screen with option to load demo session
     st.markdown("""
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:5rem 2rem;text-align:center">
-        <div style="font-size:4rem;margin-bottom:1rem">🎬</div>
-        <div style="font-family:'Syne',sans-serif;font-size:1.5rem;font-weight:700;color:var(--text);margin-bottom:0.5rem">
-            Ready to Analyse
+    <div class="card onboarding-card" style="text-align: center; max-width: 700px; margin: 3rem auto; padding: 3.5rem 2.5rem;">
+        <div style="font-size: 4.5rem; margin-bottom: 1.5rem; filter: drop-shadow(0 0 20px rgba(139, 92, 246, 0.45));">🎬</div>
+        <h2 style="font-family:'Syne', sans-serif; font-weight:800; font-size:2.2rem; margin-bottom:0.75rem; background: linear-gradient(135deg, #ffffff, #a78bfa, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+            AI Video Assistant
+        </h2>
+        <p style="color:var(--text-muted); font-size:0.95rem; line-height:1.75; margin-bottom:2rem;">
+            A premium workspace to transcribe, summarize, and query your meeting recordings. Upload a video/audio file or paste a YouTube URL to get started, or immediately load our pre-configured demo session to see the assistant in action.
+        </p>
+        <div style="display:flex; justify-content:center; gap:1.25rem; margin-bottom:1.5rem; flex-wrap:wrap;">
+            <span class="badge badge-purple">🔊 Audio Processing</span>
+            <span class="badge badge-cyan">📝 Transcription</span>
+            <span class="badge badge-green">🧠 RAG Chat</span>
         </div>
-        <div style="color:var(--text-muted);font-size:0.85rem;max-width:380px;line-height:1.7">
-            Paste a YouTube URL or local file path in the sidebar, choose your language, and hit <strong>Analyse</strong> to get started.
-        </div>
-        <div style="margin-top:2rem;display:flex;gap:1rem;flex-wrap:wrap;justify-content:center">
-            <span class="badge badge-purple">Transcription</span>
-            <span class="badge badge-cyan">Summarisation</span>
-            <span class="badge badge-green">RAG Chat</span>
-        </div>
-    </div>""", unsafe_allow_html=True)
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_l, col_btn, col_r = st.columns([1.5, 2, 1.5])
+    with col_btn:
+        if st.button("⚡ Load Demo Session", use_container_width=True):
+            st.session_state.result = {
+                "title": "🎬 AI Video Assistant - Demo Project Kickoff",
+                "transcript": (
+                    "Akarsh Vyas: Welcome everyone to the AI Video Assistant kickoff meeting. Today we are designing the architecture and the user interface. We need to decide on our technology stack and layout design.\n\n"
+                    "Shreya: Yes, for the tech stack, we will use Python and Streamlit on the frontend, and LangChain with Mistral AI for orchestration. We will run ChromaDB locally as our vector database and HuggingFace for generating embeddings. For local transcription, we'll use OpenAI Whisper.\n\n"
+                    "Akarsh Vyas: Perfect. Let's make sure our UI is highly aesthetic and glassmorphic, with deep violet and neon cyan gradients. I will take ownership of implementing the stylesheet and layouts by tomorrow.\n\n"
+                    "Shreya: Great, I will focus on the backend pipeline, setting up Mistral API keys, and integrating ChromaDB. Let's aim to have the first integrated demo ready by Friday.\n\n"
+                    "Akarsh Vyas: Sounds like a plan. Let's meet again on Thursday to sync."
+                ),
+                "summary": (
+                    "<ul>"
+                    "<li><strong>Kickoff Meeting:</strong> The team initiated the AI Video Assistant project, aligning on the system architecture and UI goals.</li>"
+                    "<li><strong>Technology Stack:</strong> Agreed to use Python and Streamlit, powered by LangChain and Mistral AI, with ChromaDB for local vector storage.</li>"
+                    "<li><strong>UI/UX Design:</strong> Decided on a premium glassmorphic dark-theme UI with deep purple/cyan gradients and subtle neon hover scales.</li>"
+                    "<li><strong>Roles & Milestones:</strong> Akarsh Vyas will handle the UI styling (by tomorrow), while Shreya integrates the backend pipeline (by Friday).</li>"
+                    "</ul>"
+                ),
+                "action_items": (
+                    "1. 🎨 <strong>UI Stylesheet Implementation</strong><br>Owner: Akarsh Vyas | Deadline: Tomorrow<br><br>"
+                    "2. ⚙️ <strong>Backend & RAG Pipeline Integration</strong><br>Owner: Shreya | Deadline: Friday<br><br>"
+                    "3. 📅 <strong>Thursday Status Sync</strong><br>Owner: All | Deadline: Thursday"
+                ),
+                "key_decisions": (
+                    "1. <strong>Frontend Framework:</strong> Chosen Streamlit for fast prototyping combined with custom HTML/CSS overrides.<br><br>"
+                    "2. <strong>Core LLM Orchestration:</strong> Selected LangChain with Mistral AI for summarization, extracting items, and RAG.<br><br>"
+                    "3. <strong>Local DB:</strong> Selected ChromaDB for embedding storage and similarity retrieval."
+                ),
+                "open_questions": (
+                    "1. Do we need to support multi-language translation beyond Hinglish in Phase 2?<br><br>"
+                    "2. Should we support cloud vector stores if data size scales up?"
+                ),
+                "rag_chain": DemoRagChain(),
+            }
+            st.session_state.pipeline_done = True
+            st.session_state.pipeline_steps = {
+                "audio": "done",
+                "transcript": "done",
+                "title": "done",
+                "summary": "done",
+                "extract": "done",
+                "rag": "done"
+            }
+            st.rerun()

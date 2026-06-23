@@ -1,19 +1,22 @@
 from dotenv import load_dotenv
+
+# Load env variables before importing local modules
+load_dotenv()
+
 from utils.audio_processor import process_input
 from core.transcriber import transcribe_all
 from core.summarizer import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.rag_engine import build_rag_chain, ask_question
 
-
-load_dotenv()
-
 def run_pipeline(source :str, language :str = "english") -> dict:
     print("starting AI Video Assistant")
 
     chunks = process_input(source)
 
-    transcript = transcribe_all(chunks,language)
+    transcription_res = transcribe_all(chunks, language)
+    transcript = transcription_res["text"]
+    segments = transcription_res["segments"]
     print(f"raw transcription (first 300 characters ) {transcript[:300]}")
 
     title = generate_title(transcript)
@@ -30,6 +33,7 @@ def run_pipeline(source :str, language :str = "english") -> dict:
     return {
         "title": title,
         "transcript": transcript,
+        "segments": segments,
         "summary": summary,
         "action_items": action_item,
         "key_decisions": decisions,

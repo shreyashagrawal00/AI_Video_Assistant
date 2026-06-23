@@ -1,1 +1,36 @@
+# Environment variables
 .env
+
+# Virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python caching & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# User uploads & downloaded audio/video files
+downloads/
+
+# Vector database storage
+vector_db/
+
+# Streamlit configuration & logs
+.streamlit/
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor & IDE configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp

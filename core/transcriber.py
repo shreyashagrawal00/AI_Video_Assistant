@@ -29,12 +29,26 @@ def load_model():
     return _model 
 
 
-def transcribe_chunk_whisper(chunk_path: str) -> str:
-
+def transcribe_chunk_whisper(chunk_path: str, start_offset: float = 0.0) -> list:
     model = load_model()  
-
     result = model.transcribe(chunk_path, task="transcribe")  
-    return result["text"]  
+    
+    segments = []
+    for seg in result.get("segments", []):
+        segments.append({
+            "start": round(seg["start"] + start_offset, 2),
+            "end": round(seg["end"] + start_offset, 2),
+            "text": seg["text"].strip()
+        })
+        
+    if not segments and result.get("text"):
+        segments.append({
+            "start": round(start_offset, 2),
+            "end": round(start_offset + 30.0, 2),
+            "text": result["text"].strip()
+        })
+        
+    return segments
 
 
 def _send_to_sarvam(piece_path: str) -> str:
@@ -53,14 +67,14 @@ def _send_to_sarvam(piece_path: str) -> str:
         )
 
     if not response.ok:
-        print(f"\n❌ Sarvam returned {response.status_code}")
+        print(f"\nERROR: Sarvam returned {response.status_code}")
         print(f"Response body: {response.text}\n")
         response.raise_for_status()
 
     return response.json().get("transcript", "")
 
 
-def transcribe_chunk_sarvam(chunk_path: str) -> str:
+def transcribe_chunk_sarvam(chunk_path: str, start_offset: float = 0.0) -> list:
     """
     Sarvam sync API only accepts ≤30s audio. We split this chunk into
     25-second pieces, send each separately, and join the transcripts.
@@ -71,7 +85,7 @@ def transcribe_chunk_sarvam(chunk_path: str) -> str:
     audio = AudioSegment.from_wav(chunk_path)
     piece_ms = SARVAM_PIECE_SECONDS * 1000
 
-    full_text = ""
+    segments = []
     total_pieces = (len(audio) + piece_ms - 1) // piece_ms
 
     for i, start in enumerate(range(0, len(audio), piece_ms)):
@@ -81,43 +95,49 @@ def transcribe_chunk_sarvam(chunk_path: str) -> str:
 
         try:
             print(f"  → Sarvam piece {i + 1}/{total_pieces} ...")
-            full_text += _send_to_sarvam(piece_path) + " "
+            text = _send_to_sarvam(piece_path).strip()
+            if text:
+                seg_start = start_offset + (start / 1000.0)
+                seg_end = start_offset + (min(start + piece_ms, len(audio)) / 1000.0)
+                segments.append({
+                    "start": round(seg_start, 2),
+                    "end": round(seg_end, 2),
+                    "text": text
+                })
         finally:
             if os.path.exists(piece_path):
                 os.remove(piece_path)
 
-    return full_text.strip()
-
-   
+    return segments
 
 
-
-def transcribe_chunk(chunk_path: str, language: str = "english") -> str:
+def transcribe_chunk(chunk_path: str, language: str = "english", start_offset: float = 0.0) -> list:
     """
     Route one chunk to Whisper or Sarvam depending on language choice.
     - english  → Whisper (local model)
     - hinglish → Sarvam (translates to English while transcribing)
     """
     if language.lower() == "hinglish":
-        return transcribe_chunk_sarvam(chunk_path)
-    return transcribe_chunk_whisper(chunk_path)
+        return transcribe_chunk_sarvam(chunk_path, start_offset)
+    return transcribe_chunk_whisper(chunk_path, start_offset)
 
 
-def transcribe_all(chunks: list, language: str = "english") -> str:
-
-    full_transcript = "" 
-
+def transcribe_all(chunks: list, language: str = "english", chunk_minutes: int = 10) -> dict:
+    full_segments = []
     engine = "Sarvam AI" if language.lower() == "hinglish" else "Whisper"
     print(f"Using {engine} for transcription.")
 
     for i, chunk in enumerate(chunks):  
-
         print(f"Transcribing chunk {i + 1}/{len(chunks)}...")
-
-        text = transcribe_chunk(chunk, language=language)  
-
-        full_transcript += text + " "  
+        start_offset = i * chunk_minutes * 60.0
+        segments = transcribe_chunk(chunk, language=language, start_offset=start_offset)  
+        full_segments.extend(segments)
 
     print("Transcription complete.")
-
-    return full_transcript.strip()  
+    
+    full_text = " ".join([seg["text"] for seg in full_segments])
+    
+    return {
+        "text": full_text.strip(),
+        "segments": full_segments
+    }
