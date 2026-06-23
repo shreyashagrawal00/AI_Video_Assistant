@@ -11,6 +11,7 @@ audioop-lts; python_version >= '3.13' # Audioop backport for Python 3.13+
 # ── Speech-to-Text (local Whisper) ────────────────────────────────────────────
 openai-whisper>=20231117          # OpenAI Whisper (runs locally)
 torch>=2.2.0                      # PyTorch backend for Whisper
+torchvision                       # Prevent warnings during transformers module scanning
 torchaudio>=2.2.0                 # Audio utilities for PyTorch
 
 # ── Translation (Hindi → English) ─────────────────────────────────────────────
